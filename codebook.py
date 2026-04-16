@@ -72,12 +72,19 @@ def load_config(args: argparse.Namespace, root: Path) -> dict:
         config["model"] = args.model
     if args.output:
         config["output"] = args.output
-    if args.extensions:
-        config["extensions"] = args.extensions.split(",")
     if args.skip_dirs:
         config["skip_dirs"] = args.skip_dirs.split(",")
     if args.prompt_lang:
         config["prompt_lang"] = args.prompt_lang
+
+    # Handle extensions: "*" or "auto" = auto-detect all
+    if args.extensions:
+        if args.extensions.lower() in ("*", "auto"):
+            # Auto-detect all extensions in the directory
+            all_exts = get_all_extensions(root, set(config["skip_dirs"]))
+            config["extensions"] = list(all_exts) if all_exts else config["extensions"]
+        else:
+            config["extensions"] = args.extensions.split(",")
 
     return config
 
@@ -142,12 +149,59 @@ def extract_snippets(file_path: Path, source: str) -> list[dict]:
         return extract_python_functions(source)
     elif file_path.suffix in (".ts", ".tsx"):
         return extract_ts_functions(source)
-    return []
+    # For other file types, try to extract simple function-like patterns
+    return extract_generic_functions(source, file_path.suffix)
+
+
+def extract_generic_functions(source: str, ext: str) -> list[dict]:
+    """Extract function-like patterns from any text file (generic fallback)."""
+    snippets = []
+    lines = source.splitlines()
+
+    # Simple pattern: look for lines with "function", "def", "func", etc.
+    patterns = [
+        r"^(?:export\s+)?(?:async\s+)?function\s+(\w+)",  # JS/TS functions
+        r"^def\s+(\w+)\s*\(",  # Python defs
+        r"^class\s+(\w+)",  # Class definitions
+        r"^pub\s+(?:async\s+)?fn\s+(\w+)",  # Rust functions
+        r"^func\s+(?:\w+\s+)?(\w+)",  # Go functions
+    ]
+
+    for pattern_str in patterns:
+        pattern = re.compile(pattern_str, re.MULTILINE)
+        for match in pattern.finditer(source):
+            name = match.group(1)
+            start_line = source[: match.start()].count("\n")
+            end_line = min(start_line + 30, len(lines))
+            snippets.append(
+                {
+                    "name": name,
+                    "start": start_line + 1,
+                    "end": end_line,
+                    "code": "\n".join(lines[start_line:end_line]),
+                    "type": "function",
+                }
+            )
+
+    return snippets
 
 
 # ──────────────────────────────────────────────────────────────────────────────
 # FILE DISCOVERY
 # ──────────────────────────────────────────────────────────────────────────────
+
+
+def get_all_extensions(root: Path, skip_dirs: set[str]) -> set[str]:
+    """Scan directory and find all unique file extensions."""
+    extensions = set()
+    try:
+        for f in root.rglob("*"):
+            if f.is_file() and not any(skip in f.parts for skip in skip_dirs):
+                if f.suffix:
+                    extensions.add(f.suffix)
+    except (PermissionError, RecursionError):
+        pass
+    return extensions
 
 
 def get_files(
@@ -338,7 +392,11 @@ Examples:
     parser.add_argument("--url", help="LM Studio base URL (default: http://localhost:1234/v1)")
     parser.add_argument("--model", help="Model name (auto-detect if not specified)")
     parser.add_argument("--output", help="Output file path (default: CODEBASE_BOOK.md)")
-    parser.add_argument("--extensions", help="Comma-separated extensions (default: .py,.ts,.tsx)")
+    parser.add_argument(
+        "--extensions",
+        help="File extensions to scan. Use '*' or 'auto' to auto-detect all extensions in the codebase. "
+        "Otherwise, comma-separated (default: .py,.ts,.tsx)",
+    )
     parser.add_argument("--skip-dirs", help="Comma-separated dirs to skip")
     parser.add_argument(
         "--prompt-lang",
