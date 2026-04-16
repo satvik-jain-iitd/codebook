@@ -196,16 +196,44 @@ def extract_generic_functions(source: str, ext: str) -> list[dict]:
 
 
 def get_all_extensions(root: Path, skip_dirs: set[str]) -> set[str]:
-    """Scan directory and find all unique file extensions."""
+    """
+    Scan directory and find all unique file extensions.
+    Prioritizes code files, skips documentation/config files.
+    """
+    # Common code extensions
+    code_extensions = {
+        ".py", ".ts", ".tsx", ".js", ".jsx",  # Python, TypeScript, JavaScript
+        ".go", ".rs", ".java", ".kt", ".scala",  # Go, Rust, Java, Kotlin, Scala
+        ".cpp", ".cc", ".c", ".h", ".hpp",  # C/C++
+        ".cs", ".vb", ".fs", ".fsx",  # C#, VB.NET, F#
+        ".rb", ".php", ".swift", ".m", ".mm",  # Ruby, PHP, Swift, Objective-C
+        ".sh", ".bash", ".zsh", ".ps1",  # Shell scripts
+        ".sql", ".r", ".lua", ".pl", ".pm",  # SQL, R, Lua, Perl
+    }
+
+    # Extensions to skip (docs, config, etc.)
+    skip_extensions = {
+        ".md", ".markdown", ".rst", ".txt", ".doc", ".docx",  # Docs
+        ".json", ".yaml", ".yml", ".xml", ".toml", ".ini", ".cfg",  # Config
+        ".css", ".scss", ".sass", ".less",  # Stylesheets (no functions to extract)
+        ".html", ".htm", ".svg", ".png", ".jpg", ".jpeg", ".gif",  # Media/HTML
+        ".pdf", ".zip", ".tar", ".gz", ".exe", ".dll", ".so",  # Binary
+    }
+
     extensions = set()
     try:
         for f in root.rglob("*"):
             if f.is_file() and not any(skip in f.parts for skip in skip_dirs):
-                if f.suffix:
+                if f.suffix in code_extensions:
+                    extensions.add(f.suffix)
+                elif f.suffix not in skip_extensions and f.suffix:
+                    # Include unknown extensions (might be code)
                     extensions.add(f.suffix)
     except (PermissionError, RecursionError):
         pass
-    return extensions
+
+    # If nothing found, return defaults
+    return extensions if extensions else {".py", ".ts", ".tsx", ".js"}
 
 
 def get_files(
