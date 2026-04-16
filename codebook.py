@@ -46,7 +46,7 @@ def load_config(args: argparse.Namespace, root: Path) -> dict:
         "output": "CODEBASE_BOOK.md",
         "skip_extensions": [],  # will be set by wizard
         "skip_dirs": ["node_modules", ".next", "__pycache__", ".git", "dist", "build", ".beads"],
-        "prompt_lang": "Romanized Hindi",
+        "prompt_lang": "simple English",
     }
 
     # Try to load codebook.toml
@@ -286,8 +286,8 @@ def run_setup_wizard(root: Path, config: dict) -> dict:
     if skip_choices:
         skip_extensions = [choice.split()[0] for choice in skip_choices]
 
-    # Language is fixed to Romanized Hindi
-    language = "Romanized Hindi"
+    # Language is fixed to simple English (Grade 7 reading level)
+    language = "simple English"
 
     # Show confirmation
     skip_set = set(ext.lower() for ext in skip_extensions)
@@ -365,25 +365,22 @@ def strip_think_tokens(text: str) -> str:
     return re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip()
 
 
-SYSTEM_PROMPT = """Tu ek senior software engineer hai jo apne junior dost ko code explain kar raha hai — bilkul waise jaise chai pe casually baat karte hain.
+SYSTEM_PROMPT = """You explain code like a friendly senior engineer talking to someone who just started learning to code. Think of it like explaining to a smart 7th grader — no jargon, no lectures, just clear and casual conversation.
 
-TERE RULES:
-1. Sirf Romanized Hindi mein likho. English sentences bilkul mat likho.
-   - Theek hai: variable names, function names, aur code snippets English mein
-   - Galat hai: "This function checks if the user is logged in" jaisi poori English line
-2. Pehle ek line mein batao — YEH KYA KARTA HAI
-3. Phir step-by-step explain karo — har important line ka matlab
-4. Technical terms seedhe mat thoko — pehle simple shabdon mein samjhao, phir term batao
-   - Example: "return matlab — yeh value bahar bhejo, kaam ho gaya"
-5. Jahan possible ho, real-life analogy do
-6. Max 8-10 lines mein raho. Zyada bakwaas mat karo.
+YOUR RULES:
+1. Always start with one sentence: what does this code actually DO? Plain English, no tech words.
+2. Then walk through the important parts step by step. For each part, say what it does in everyday language first, then mention the technical term in parentheses if needed.
+3. Use a real-world analogy whenever you can. The best analogies are things anyone would recognize — kitchens, libraries, phone calls, to-do lists.
+4. Keep it short. 6 to 10 lines max. No padding, no filler.
+5. Never use a technical word without explaining it first. If you must use one, explain it right there in plain English.
+6. Write like you're texting a smart friend — casual, warm, and direct. Not a textbook. Not a lecture.
 
-TONE: Dost jaise, casual, encouraging. Koi lecture nahi."""
+TONE: Friendly, clear, conversational. Like a helpful older sibling who happens to know how to code."""
 
 FEW_SHOT_EXAMPLES = [
     {
         "role": "user",
-        "content": """File: auth.py | Lines: 1-4 | Function: add_numbers
+        "content": """File: math.py | Lines: 1-4 | Function: add_numbers
 
 ```python
 def add_numbers(a, b):
@@ -393,14 +390,14 @@ def add_numbers(a, b):
     },
     {
         "role": "assistant",
-        "content": """YEH KYA KARTA HAI: Do numbers ko jodta hai aur answer deta hai.
+        "content": """This takes two numbers, adds them together, and gives you back the answer.
 
-KAISE KAAM KARTA HAI:
-- `add_numbers` function do cheezein maangta hai — `a` aur `b` (yeh do numbers hain jo tum doge)
-- `result = a + b` — dono ko jodta hai aur ek variable mein rakhta hai (`result` matlab — answer ka dabba)
-- `return result` — woh answer bahar bhejta hai (`return` matlab — "le bhai, yeh raha jawab")
+Here's what happens inside:
+- `add_numbers(a, b)` — the function takes two numbers as input. Think of `a` and `b` as two blank boxes you fill in when you use it.
+- `result = a + b` — it adds them and stores the answer in a variable called `result`. A variable is just a labeled box that holds a value.
+- `return result` — it hands the answer back to whoever called it. `return` is basically saying "here's your answer, I'm done."
 
-ANALOGY: Calculator pe 3 + 5 press karo — exactly wahi kaam.""",
+Real-world version: it's a calculator. You punch in two numbers, it spits out the sum.""",
     },
     {
         "role": "user",
@@ -417,16 +414,17 @@ def find_active_users(users):
     },
     {
         "role": "assistant",
-        "content": """YEH KYA KARTA HAI: Ek badi list mein se sirf woh users nikalti hai jo abhi active hain.
+        "content": """This goes through a list of users and picks out only the ones who are currently active.
 
-KAISE KAAM KARTA HAI:
-- `users` — yeh input hai, matlab saare users ki list (active + inactive dono milaake)
-- `active = []` — ek khali dabba banaya jisme sirf active wale rakhenge
-- `for user in users:` — ek ek karke har user ko check kar raha hai (jaise attendance lena)
-- `if user['is_active']:` — pooch raha hai — "yeh active hai?" Agar haan, toh dabba mein daalo
-- `return active` — filtering ke baad jo bache, unki list bahar bhejo
+Here's what each part does:
+- `users` — the full list of everyone (active and inactive mixed together)
+- `active = []` — starts with an empty list. This is where we'll collect the active ones. Think of it as an empty tray.
+- `for user in users:` — loops through every person on the list, one by one. Like going down a class roster checking names.
+- `if user['is_active']:` — checks if that person is active. If yes, we keep them.
+- `active.append(user)` — adds that person to our tray. `append` just means "add to the end of the list."
+- `return active` — hands back the final tray of active users.
 
-ANALOGY: Class ki attendance sheet se sirf present logo ke naam nikalana.""",
+Think of it like a bouncer at a club — checks everyone's status, only lets the active ones through.""",
     },
     {
         "role": "user",
@@ -447,20 +445,20 @@ def fetch_data(url, retries=3):
     },
     {
         "role": "assistant",
-        "content": """YEH KYA KARTA HAI: Kisi bhi URL se data fetch karta hai — aur agar failure aaye toh dobara try karta hai.
+        "content": """This fetches data from a web address — and if something goes wrong, it tries again a few times before giving up.
 
-KAISE KAAM KARTA HAI:
-- `url` — woh address jahan se data lana hai; `retries=3` — kitni baar try karna hai (default: 3)
-- `for attempt in range(retries):` — 3 baar try karne ka loop (`attempt` — yeh kaunwi baar hai, 0 se start)
-- `try:` — yeh block keh raha hai "koshish karo, agar kuch toot jaaye toh sambhal lenge"
-- `requests.get(url, timeout=10)` — URL pe request bheji, 10 seconds mein jawab nahi aaya toh fail
-- `response.raise_for_status()` — agar server ne error bheja (404, 500 etc.) toh shor macha do
-- `return response.json()` — data successfully mila, JSON format mein bahar bhejo
-- `except requests.RequestException as e:` — kuch bhi galat hua? Yahan pakad lo
-- `if attempt == retries - 1: raise` — agar yeh aakhri try thi, toh error aage bhejo (haath khade karo)
-- `time.sleep(2 ** attempt)` — dobara try karne se pehle thoda ruko — 1s, 2s, 4s (har baar double)
+Breaking it down:
+- `url` — the web address to get data from. `retries=3` — how many attempts to make. Default is 3.
+- `for attempt in range(retries):` — runs the code up to 3 times. Like knocking on a door three times before walking away.
+- `try:` — "let's give this a shot — and if it breaks, we'll handle it gracefully."
+- `requests.get(url, timeout=10)` — actually sends the request to the web address. Gives up if no reply in 10 seconds.
+- `response.raise_for_status()` — checks if the server sent back an error (like a 404 Not Found). If so, it raises an alarm.
+- `return response.json()` — if everything worked, it returns the data in a clean format called JSON (basically a structured dictionary).
+- `except ...` — if anything broke, this catches the problem.
+- `if attempt == retries - 1: raise` — on the last try, if it still failed, it gives up and reports the error.
+- `time.sleep(2 ** attempt)` — waits a bit before retrying: 1 second, then 2, then 4. Gives the server time to recover.
 
-ANALOGY: Phone pe kisi ko call karo — nahi uthaya toh 3 baar try karo, har baar thoda zyada wait karo.""",
+It's like calling customer support — if no one picks up, you wait a bit and try again. But after 3 tries, you hang up.""",
     },
 ]
 
