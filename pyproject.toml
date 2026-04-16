@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "codebook"
+version = "0.1.0"
+description = "Generate documentation for any codebase using local LM Studio"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+authors = [
+    {name = "Satvik Jain", email = "klickbae8yt@gmail.com"}
+]
+
+dependencies = [
+    "requests>=2.28.0",
+    "tqdm>=4.64.0",
+]
+
+[project.optional-dependencies]
+dev = ["black", "ruff"]
+
+[project.scripts]
+codebook = "codebook:main"
+
+[project.urls]
+Homepage = "https://github.com/satvikjain/codebook"
+Repository = "https://github.com/satvikjain/codebook"
