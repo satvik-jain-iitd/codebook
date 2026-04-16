@@ -73,7 +73,9 @@ def load_config(args: argparse.Namespace, root: Path) -> dict:
     if args.output:
         config["output"] = args.output
     if args.skip_dirs:
-        config["skip_dirs"] = args.skip_dirs.split(",")
+        # Filter out empty strings
+        skip_dirs_list = [d.strip() for d in args.skip_dirs.split(",") if d.strip()]
+        config["skip_dirs"] = skip_dirs_list if skip_dirs_list else []
     if args.prompt_lang:
         config["prompt_lang"] = args.prompt_lang
 
@@ -84,7 +86,9 @@ def load_config(args: argparse.Namespace, root: Path) -> dict:
             all_exts = get_all_extensions(root, set(config["skip_dirs"]))
             config["extensions"] = list(all_exts) if all_exts else config["extensions"]
         else:
-            config["extensions"] = args.extensions.split(",")
+            # Filter out empty strings
+            ext_list = [e.strip() for e in args.extensions.split(",") if e.strip()]
+            config["extensions"] = ext_list if ext_list else config["extensions"]
 
     return config
 
