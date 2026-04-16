@@ -25,6 +25,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
+import questionary
 import requests
 from tqdm import tqdm
 
@@ -43,7 +44,7 @@ def load_config(args: argparse.Namespace, root: Path) -> dict:
         "url": "http://localhost:1234/v1",
         "model": None,  # auto-detect from server
         "output": "CODEBASE_BOOK.md",
-        "extensions": [".py", ".ts", ".tsx"],
+        "skip_extensions": [],  # will be set by wizard
         "skip_dirs": ["node_modules", ".next", "__pycache__", ".git", "dist", "build", ".beads"],
         "prompt_lang": "plain English",
     }
@@ -78,17 +79,6 @@ def load_config(args: argparse.Namespace, root: Path) -> dict:
         config["skip_dirs"] = skip_dirs_list if skip_dirs_list else []
     if args.prompt_lang:
         config["prompt_lang"] = args.prompt_lang
-
-    # Handle extensions: "*" or "auto" = auto-detect all
-    if args.extensions:
-        if args.extensions.lower() in ("*", "auto"):
-            # Auto-detect all extensions in the directory
-            all_exts = get_all_extensions(root, set(config["skip_dirs"]))
-            config["extensions"] = list(all_exts) if all_exts else config["extensions"]
-        else:
-            # Filter out empty strings
-            ext_list = [e.strip() for e in args.extensions.split(",") if e.strip()]
-            config["extensions"] = ext_list if ext_list else config["extensions"]
 
     return config
 
@@ -195,12 +185,13 @@ def extract_generic_functions(source: str, ext: str) -> list[dict]:
 # ──────────────────────────────────────────────────────────────────────────────
 
 
-def get_all_extensions(root: Path, skip_dirs: set[str]) -> set[str]:
+def get_all_extensions(root: Path, skip_dirs: set[str]) -> dict[str, list[str]]:
     """
     Scan directory and find all unique file extensions.
-    Prioritizes code files, skips documentation/config files.
+    Groups them by category for display.
+    Returns dict with categories as keys and list of extensions as values.
     """
-    # Common code extensions
+    # Extension categories
     code_extensions = {
         ".py", ".ts", ".tsx", ".js", ".jsx",  # Python, TypeScript, JavaScript
         ".go", ".rs", ".java", ".kt", ".scala",  # Go, Rust, Java, Kotlin, Scala
@@ -211,45 +202,143 @@ def get_all_extensions(root: Path, skip_dirs: set[str]) -> set[str]:
         ".sql", ".r", ".lua", ".pl", ".pm",  # SQL, R, Lua, Perl
     }
 
-    # Extensions to skip (docs, config, etc.)
-    skip_extensions = {
+    doc_extensions = {
         ".md", ".markdown", ".rst", ".txt", ".doc", ".docx",  # Docs
-        ".json", ".yaml", ".yml", ".xml", ".toml", ".ini", ".cfg",  # Config
-        ".css", ".scss", ".sass", ".less",  # Stylesheets (no functions to extract)
-        ".html", ".htm", ".svg", ".png", ".jpg", ".jpeg", ".gif",  # Media/HTML
-        ".pdf", ".zip", ".tar", ".gz", ".exe", ".dll", ".so",  # Binary
     }
 
-    extensions = set()
+    config_extensions = {
+        ".json", ".yaml", ".yml", ".xml", ".toml", ".ini", ".cfg",  # Config
+    }
+
+    image_extensions = {
+        ".png", ".jpg", ".jpeg", ".gif", ".svg", ".bmp", ".webp",  # Images
+    }
+
+    # True binaries to never scan
+    binary_extensions = {
+        ".exe", ".dll", ".so", ".zip", ".tar", ".gz", ".pdf",  # Binary
+    }
+
+    categories = {
+        "CODE": set(),
+        "DOCS": set(),
+        "CONFIG": set(),
+        "IMAGES": set(),
+        "OTHER": set(),
+    }
+
     try:
         for f in root.rglob("*"):
             if f.is_file() and not any(skip in f.parts for skip in skip_dirs):
-                if f.suffix in code_extensions:
-                    extensions.add(f.suffix)
-                elif f.suffix not in skip_extensions and f.suffix:
-                    # Include unknown extensions (might be code)
-                    extensions.add(f.suffix)
+                ext = f.suffix.lower()
+                if not ext or ext in binary_extensions:
+                    continue
+
+                if ext in code_extensions:
+                    categories["CODE"].add(ext)
+                elif ext in doc_extensions:
+                    categories["DOCS"].add(ext)
+                elif ext in config_extensions:
+                    categories["CONFIG"].add(ext)
+                elif ext in image_extensions:
+                    categories["IMAGES"].add(ext)
+                else:
+                    categories["OTHER"].add(ext)
     except (PermissionError, RecursionError):
         pass
 
-    # If nothing found, return defaults
-    return extensions if extensions else {".py", ".ts", ".tsx", ".js"}
+    # Convert sets to sorted lists
+    result = {k: sorted(list(v)) for k, v in categories.items() if v}
+    return result if result else {"CODE": [".py", ".ts", ".tsx", ".js"]}
+
+
+def run_setup_wizard(root: Path, config: dict) -> dict:
+    """
+    Interactive setup wizard: choose which extensions to skip, set language.
+    Returns updated config with skip_extensions.
+    """
+    print("\n📚 codebook — Setup\n")
+
+    # Scan for all extensions
+    ext_by_category = get_all_extensions(root, set(config["skip_dirs"]))
+
+    # Flatten for questionary
+    all_extensions = []
+    for category, exts in ext_by_category.items():
+        for ext in exts:
+            all_extensions.append((ext, category))
+
+    # Build checkbox choices
+    choices = []
+    for ext, category in sorted(all_extensions):
+        choices.append(f"{ext} ({category})")
+
+    # Ask which to skip (default: none)
+    print(f"Found {len(all_extensions)} file types.\n")
+    skip_choices = questionary.checkbox(
+        "Which file types should be SKIPPED? (Space to select, Enter to confirm)",
+        choices=choices,
+        validate=lambda x: True,  # Allow empty selection (skip nothing)
+    ).ask()
+
+    # Extract extensions from choices
+    skip_extensions = []
+    if skip_choices:
+        skip_extensions = [choice.split()[0] for choice in skip_choices]
+
+    # Ask for language
+    language = questionary.select(
+        "Language for explanations?",
+        choices=["plain English", "Romanized Hindi", "Spanish", "French", "German"],
+    ).ask()
+
+    if not language:
+        language = "plain English"
+
+    # Show confirmation
+    skip_set = set(ext.lower() for ext in skip_extensions)
+    will_scan = [ext for ext, _ in sorted(all_extensions) if ext.lower() not in skip_set]
+    will_scan_str = ", ".join(will_scan) if will_scan else "(nothing)"
+    skip_exts_str = ", ".join(skip_extensions) if skip_extensions else "(none)"
+
+    print("\n" + "─" * 50)
+    print(f"  Will scan:   {will_scan_str}")
+    print(f"  Will skip:   {skip_exts_str}")
+    print(f"  Language:    {language}")
+    print(f"  Output:      {config['output']}")
+    print("─" * 50 + "\n")
+
+    confirm = questionary.confirm("Looks good?").ask()
+    if not confirm:
+        print("Cancelled.")
+        sys.exit(0)
+
+    # Update config
+    config["skip_extensions"] = skip_extensions
+    config["prompt_lang"] = language
+
+    return config
 
 
 def get_files(
-    root: Path, extensions: set[str], skip_dirs: set[str], single: Optional[str] = None
+    root: Path, skip_extensions: list[str], skip_dirs: set[str], single: Optional[str] = None
 ) -> list[Path]:
-    """Recursively discover files matching extensions, excluding skip_dirs."""
+    """Recursively discover files, excluding skip_dirs and skip_extensions."""
     if single:
         return [Path(single)]
 
+    skip_ext_lower = set(ext.lower() for ext in skip_extensions)
     files = []
     try:
         for f in root.rglob("*"):
-            if f.is_file() and f.suffix in extensions:
+            if f.is_file():
                 # Check if any skip_dir component is in the path
-                if not any(skip in f.parts for skip in skip_dirs):
-                    files.append(f)
+                if any(skip in f.parts for skip in skip_dirs):
+                    continue
+                # Skip if extension is in skip list
+                if f.suffix.lower() in skip_ext_lower:
+                    continue
+                files.append(f)
     except (PermissionError, RecursionError):
         pass
 
@@ -424,11 +513,6 @@ Examples:
     parser.add_argument("--url", help="LM Studio base URL (default: http://localhost:1234/v1)")
     parser.add_argument("--model", help="Model name (auto-detect if not specified)")
     parser.add_argument("--output", help="Output file path (default: CODEBASE_BOOK.md)")
-    parser.add_argument(
-        "--extensions",
-        help="File extensions to scan. Use '*' or 'auto' to auto-detect all extensions in the codebase. "
-        "Otherwise, comma-separated (default: .py,.ts,.tsx)",
-    )
     parser.add_argument("--skip-dirs", help="Comma-separated dirs to skip")
     parser.add_argument(
         "--prompt-lang",
@@ -436,11 +520,6 @@ Examples:
     )
     parser.add_argument("--file", help="Annotate single file only")
     parser.add_argument("--check", action="store_true", help="Check server status and exit")
-    parser.add_argument(
-        "--no-skip-done",
-        action="store_true",
-        help="Re-annotate already-done functions",
-    )
 
     return parser
 
@@ -480,8 +559,11 @@ def main() -> None:
     if args.check:
         sys.exit(0)
 
+    # Run setup wizard
+    config = run_setup_wizard(root, config)
+
     # Discover files
-    print(f"Scanning {root}...")
+    print(f"\nScanning {root}...")
     # If --file is provided, resolve it relative to root if it's not absolute
     single_file = None
     if args.file:
@@ -490,7 +572,7 @@ def main() -> None:
             single_path = root / single_path
         single_file = str(single_path.resolve())
 
-    files = get_files(root, set(config["extensions"]), set(config["skip_dirs"]), single_file)
+    files = get_files(root, config["skip_extensions"], set(config["skip_dirs"]), single_file)
 
     if not files:
         print("No files found.")
@@ -535,8 +617,8 @@ def main() -> None:
                 rel_path = file_path
 
             for snippet in snippets:
-                # Skip if already done (unless --no-skip-done)
-                if not args.no_skip_done and already_done(snippet["name"], str(rel_path), output_file):
+                # Skip if already done
+                if already_done(snippet["name"], str(rel_path), output_file):
                     tqdm.write(f"  ⊘ {snippet['name']} — already done")
                     pbar.update(1)
                     continue
