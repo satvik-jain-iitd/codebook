@@ -3,9 +3,9 @@ requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "codebook"
-version = "2.0.0"
-description = "Generate documentation for any codebase using local LM Studio"
+name = "codebookx"
+version = "3.0.0"
+description = "Codebase-X: Production-grade, offline code comprehension and AI-tasking platform"
 readme = "README.md"
 requires-python = ">=3.10"
 license = {text = "MIT"}
@@ -17,14 +17,16 @@ dependencies = [
     "requests>=2.28.0",
     "tqdm>=4.64.0",
     "questionary>=2.0.0",
+    "tomli>=2.0.0; python_version < '3.11'",
 ]
 
 [project.optional-dependencies]
-dev = ["black", "ruff"]
+ui = ["flask>=2.0.0"]
+dev = ["black", "ruff", "tree-sitter"]
 
 [project.scripts]
-codebook = "codebook:main"
+codebookx = "codebookx.cli:main"
+codebook = "codebookx.cli:main"
 
 [project.urls]
 Homepage = "https://github.com/satvikjain/codebook"
-Repository = "https://github.com/satvikjain/codebook"
