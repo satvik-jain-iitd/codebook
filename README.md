@@ -1,225 +1,93 @@
-# codebook
+# Codebase-X
 
-**Auto-generate documentation for any codebase using a local LLM.**
+**The Intelligent AI Assistant for Your Entire Codebase.**
 
-Scan your repository → extract all functions/classes → send to local LM Studio → 
-stream explanations live to your terminal → generate `CODEBASE_BOOK.md`.
-
-Zero cloud API calls. Zero costs. Works offline.
+Codebase-X is a production-grade, offline platform designed to give you total control over your code. By building a deep, persistent Knowledge Graph of your repository, Codebase-X enables advanced architectural analysis, atomic task decomposition, and prompt engineering—all while keeping your data 100% private and local.
 
 ---
 
-## Quick Start
+## 🗺️ User Journey
 
-**1. Install LM Studio**
-- Download from [lmstudio.ai](https://lmstudio.ai)
-- Load any model (e.g., DeepSeek R1 Distill 1.5B)
-- Start the local server (Developer tab)
+1.  **`codebookx analyze`**: Scan your repository to build a Knowledge Graph and architectural teardown.
+2.  **`codebookx view`**: Launch the interactive Knowledge Graph browser to explore your code visually.
+3.  **`codebookx ask "..."`**: Ask technical questions about your codebase, powered by the Knowledge Graph context.
 
-**2. Install codebook**
+---
+
+## 🚀 Core Capabilities
+
+### 🏛️ Codebase Teardown (Analyze)
+Stop guessing how your system works. Codebase-X scans your entire repository to generate a high-level architectural blueprint.
+*   **Elevator Pitch:** Get an instant summary of any project.
+*   **Architecture Blueprint:** Automatically mapped folder roles and purposes.
+*   **Data Flow:** Understand how the core components of your system interact.
 ```bash
-pip install codebook
-# or
-python codebook.py  # run directly from this directory
+codebookx analyze
 ```
 
-**3. Generate documentation**
+### 🔨 Atomic Task Decomposition (Decompose)
+Break complex features into small, manageable pieces. Codebase-X analyzes your feature request against your actual codebase to produce a series of atomic tasks.
+*   **AI-Ready:** Each task includes a "copy-paste" prompt specifically designed for AI coding assistants.
+*   **Context-Aware:** Tasks reference the exact files and symbols needed.
 ```bash
-cd your-repo
-codebook
-
-# Or scan any directory
-codebook /path/to/repo
+codebookx decompose "Add a user settings page"
 ```
 
-**4. Check the output**
+### ✨ Prompt Enhancement (Enhance)
+Stop writing vague prompts. The Prompt Enhancer uses the Knowledge Graph to inject relevant file paths, function signatures, and dependencies into your request, creating a high-context prompt that gets it right the first time.
 ```bash
-cat CODEBASE_BOOK.md
+codebookx enhance "Refactor the authentication flow"
 ```
 
----
-
-## Usage
-
-### Basic
+### 🕸️ Knowledge Graph Browser (View)
+Explore your code visually. Launch an interactive local web UI to traverse your project's dependency graph, find symbols, and manage your AI tasks.
+*   **Visual Map:** Interactive D3.js force-directed graph available at `/graph`.
+*   **Relations:** Track CALLS, IMPORTS, and CONTAINS relationships cross-file.
 ```bash
-# Scan current directory
-codebook
-
-# Scan specific directory
-codebook /path/to/repo
-
-# Single file only
-codebook --file src/auth.py
+codebookx view
 ```
 
-### Advanced
+### ❓ Technical Q&A (Ask)
+Knowledge Graph-backed Q&A for your codebase. Answers are saved automatically.
 ```bash
-# Custom LM Studio URL
-codebook --url http://192.168.1.8:1234/v1
+# Single question
+codebookx ask "How is the authentication handled in this project?"
 
-# Custom model
-codebook --model deepseek-r1-distill-qwen-1.5b
+# Interactive chat mode (multi-turn, context carry-over)
+codebookx ask -c "Walk me through the data flow"
 
-# Custom explanation language
-codebook --prompt-lang "Romanized Hindi"
+# Save Q&A logs to a custom directory
+codebookx ask "What does run_ask do?" --dir ~/my-notes
+```
+*   **Auto-save:** Every Q&A and chat session is saved to `ask_history/` by default (`--dir` to override, or set `CODEBOOK_ASK_DIR` env var).
+*   **Chat mode (`-c`):** Multi-turn conversation with full context carry-over. Each turn is saved incrementally — no history lost on crash.
 
-# Verify LM Studio is running
-codebook --check
+---
 
-# Re-annotate already-done functions
-codebook --no-skip-done
+## 🛠️ Getting Started
+
+**1. Install**
+```bash
+pip install .
 ```
 
-### Configuration File (Optional)
-Create `codebook.toml` in your repo root:
-```toml
-url = "http://192.168.1.8:1234/v1"
-model = "deepseek-r1-distill-qwen-1.5b"
-prompt_lang = "Romanized Hindi"
-extensions = [".py", ".ts", ".tsx"]
-skip_dirs = ["node_modules", ".git", "dist"]
-output = "CODEBASE_BOOK.md"
+**2. Local LLM Setup**
+Codebase-X is designed to work with **LM Studio**, **Ollama**, or any OpenAI-compatible local server. Ensure your server is running.
+
+**3. Initial Analysis**
+Scan your repository to build the Knowledge Graph:
+```bash
+codebookx analyze
 ```
 
-CLI arguments override config file values.
+---
+
+## 🔒 Privacy & Performance
+*   **100% Offline:** Your code never leaves your machine. No cloud APIs, no subscriptions.
+*   **Persistent Indexing:** Uses a lightning-fast SQLite-backed Knowledge Graph with hash-based caching.
+*   **Multi-Language:** Deep support for Python, TypeScript, JavaScript, and more.
 
 ---
 
-## How It Works
-
-1. **Scan** — Recursively finds all `.py`, `.ts`, `.tsx` files
-2. **Parse** — Extracts function/class definitions with accurate line ranges
-   - Python: uses `ast` module (100% accurate)
-   - TypeScript: uses regex (40-line window, suitable for most functions)
-3. **Request** — Sends each function to LM Studio's OpenAI-compatible API
-4. **Stream** — Live-streams the explanation to your terminal
-5. **Record** — Appends markdown to `CODEBASE_BOOK.md`
-6. **Resume** — Already-documented functions are skipped on re-run
-
-### Terminal Output Example
-
-```
-📚 codebook — Checking LM Studio...
-✓ Server ready. Model: deepseek-r1-distill-qwen-1.5b
-
-Scanning /Users/satvik/myproject...
-Found 12 files with 47 functions
-Output: /Users/satvik/myproject/CODEBASE_BOOK.md
-
-  authenticate (src/auth/login.py:10-25)
-  ────────────────────────────────────────────────────────
-  This function validates user credentials by checking
-  the email and password against the database...
-
-  verify_token (src/auth/login.py:27-45)
-  ────────────────────────────────────────────────────────
-  This function decodes a JWT token and verifies it...
-
-Progress ███████████░░░░░░░░░░░░░░░░ 47% | 22/47 [02:13<02:31, 0.31it/s]
-
-✅ Done! Generated: /Users/satvik/myproject/CODEBASE_BOOK.md
-```
-
-Progress bar stays at the bottom (stderr), explanations scroll above (stdout).
-
----
-
-## Output Format
-
-**CODEBASE_BOOK.md:**
-```markdown
-# Codebase Book
-
-Auto-generated by [codebook](https://github.com/satvikjain/codebook).
-Model: deepseek-r1-distill-qwen-1.5b | Generated: 2026-04-16 14:23:45
-
----
-
-## `authenticate` — src/auth/login.py
-
-**Lines 10–25**
-
-This function validates user credentials...
-
----
-
-## `verify_token` — src/auth/login.py
-
-**Lines 27–45**
-
-This function decodes a JWT token...
-
----
-```
-
-The book is self-contained and readable. Suitable for README, wiki, or learning.
-
----
-
-## Supported Languages
-
-- **Python** (`.py`) — Uses AST, 100% accurate function extraction
-- **TypeScript** (`.ts`, `.tsx`) — Regex-based, captures ~40-line functions
-
-More languages can be added by implementing extractors.
-
----
-
-## Explanation Languages
-
-Use any language or style with `--prompt-lang`:
-- `"plain English"` (default)
-- `"Romanized Hindi"`
-- `"Spanish"`
-- `"bullet points"`
-- `"one-liner summaries"`
-- or anything else!
-
-The prompt is flexible. Experiment.
-
----
-
-## Edge Cases
-
-- **Streaming response buffering** — Non-streaming responses are automatically detected and handled.
-- **Reasoning models (DeepSeek-R1)** — `<think>...</think>` tokens are stripped from the output (but shown live in terminal while streaming).
-- **Already-done functions** — Skipped on re-run to save time. Use `--no-skip-done` to re-annotate everything.
-- **Syntax errors** — Files with parse errors are silently skipped.
-- **Permission errors** — If you can't write to the output location, you'll see a clear error.
-- **LM Studio not running** — Clear message with setup instructions.
-
----
-
-## Tips
-
-- **Fast iteration** — Run multiple times. Already-documented functions are skipped, so only new/changed functions are processed.
-- **Smaller models are fine** — A 1.5B model like DeepSeek R1 Distill works great for code explanations. No need for larger models.
-- **Use offline** — No internet required. Your code never leaves your machine.
-- **Long codebases** — Progress bar shows real-time ETA. Safe to interrupt and resume anytime.
-
----
-
-## Requirements
-
-- Python 3.10+
-- LM Studio (any model)
-- ~50MB RAM for the Python tool itself
-
----
-
-## License
-
-MIT
-
----
-
-## Contributing
-
-Got ideas? File an issue or PR at [github.com/satvikjain/codebook](https://github.com/satvikjain/codebook).
-
----
-
-## Why I Built This
-
-Documentation lags behind code. Auto-generating explanations from a local model removes the friction — just run `codebook` whenever you want a fresh book. No costs, no privacy concerns, no cloud dependencies.
+## 📄 License
+Codebase-X is released under the MIT License.
