@@ -2,7 +2,6 @@ import argparse
 import sys
 from pathlib import Path
 from .core import run_generate, run_analyze, run_decompose, run_enhance, run_ask, run_ask_chat
-from .webapp.app import run_server
 
 def main():
     parser = argparse.ArgumentParser(
@@ -77,6 +76,11 @@ def main():
         db_path = root / ".codebook_cache.db"
         print(f"Starting local UI on http://localhost:{args.port}...")
         print(f"Using database: {db_path}")
+        try:
+            from .webapp.app import run_server
+        except ImportError:
+            print("Error: 'flask' not installed. Run: pip install codebookx[ui]")
+            sys.exit(1)
         run_server(port=args.port, db_path=str(db_path))
     else:
         parser.print_help()
