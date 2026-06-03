@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "codebookx"
-version = "3.0.0"
+version = "3.0.1"
 description = "Codebase-X: Production-grade, offline code comprehension and AI-tasking platform"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -30,3 +30,6 @@ codebook = "codebookx.cli:main"
 
 [project.urls]
 Homepage = "https://github.com/satvikjain/codebook"
+
+[tool.setuptools.packages.find]
+include = ["codebookx*"]

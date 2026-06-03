@@ -2,7 +2,7 @@ import hashlib
 from pathlib import Path
 from typing import List, Dict, Any
 from .graph import KnowledgeGraph
-from .parser import extract_snippets, extract_python_relations, resolve_relative_imports
+from .parser import extract_snippets, extract_python_relations, resolve_relative_imports, extract_ts_relations, resolve_ts_relative_imports
 from .vendor.claude_mem_lite import generate_code_skeleton
 
 class Indexer:
@@ -74,37 +74,44 @@ class Indexer:
                 if parent_name and parent_name in symbol_ids:
                     self.kg.add_relation(symbol_ids[parent_name], sym_id, "CONTAINS")
 
-        # P2.1 Phase 3: Two-pass post-processing for CALLS/IMPORTS (Python only)
+        # Phase 3: Two-pass post-processing for CALLS/IMPORTS (Python + JS/TS)
+        ts_extensions = {".ts", ".tsx", ".js", ".jsx"}
         py_files = [f for f in files if f.suffix == ".py"]
-        if py_files:
-            print("  Resolving CALLS/IMPORTS (Python only)...")
-            
-            # Pass 1: Build map of all Python symbol names -> id
+        ts_files = [f for f in files if f.suffix in ts_extensions]
+        lang_files = [
+            (py_files, extract_python_relations, resolve_relative_imports),
+            (ts_files, extract_ts_relations, resolve_ts_relative_imports),
+        ]
+
+        if py_files or ts_files:
+            print("  Resolving CALLS/IMPORTS...")
+
+            # Pass 1: Build map of all symbol names -> id across all languages
             all_symbols = {}
-            for file_path in py_files:
+            for file_path in py_files + ts_files:
                 source = file_path.read_text(errors="ignore")
                 snippets = extract_snippets(file_path, source)
                 for snip in snippets:
                     sid = self.kg.get_symbol_id_by_name(snip["name"])
                     if sid:
                         all_symbols[snip["name"]] = sid
-            
-            # Pass 2: Parse each Python file's AST for CALLS/IMPORTS
-            for file_path in py_files:
-                source = file_path.read_text(errors="ignore")
-                rels = extract_python_relations(source)
-                rels = resolve_relative_imports(file_path, rels)
-                for rel in rels:
-                    target_name = rel["target"]
-                    # For IMPORTS like "core.run_analyze", try bare name too
-                    bare_name = target_name.split(".")[-1]
-                    resolved = all_symbols.get(target_name) or all_symbols.get(bare_name)
-                    if resolved:
-                        from_ids = self.kg.get_symbol_ids_by_file(
-                            str(file_path.relative_to(self.root))
-                        )
-                        for fid in from_ids:
-                            self.kg.add_relation(fid, resolved, rel["type"])
+
+            # Pass 2: Extract + resolve + wire relations per language
+            for file_list, extract_fn, resolve_fn in lang_files:
+                for file_path in file_list:
+                    source = file_path.read_text(errors="ignore")
+                    rels = extract_fn(source)
+                    rels = resolve_fn(file_path, rels)
+                    for rel in rels:
+                        target_name = rel["target"]
+                        bare_name = target_name.split(".")[-1]
+                        resolved = all_symbols.get(target_name) or all_symbols.get(bare_name)
+                        if resolved:
+                            from_ids = self.kg.get_symbol_ids_by_file(
+                                str(file_path.relative_to(self.root))
+                            )
+                            for fid in from_ids:
+                                self.kg.add_relation(fid, resolved, rel["type"])
 
         print(f"✅ Indexing complete. Knowledge Graph updated.")
 
@@ -112,7 +119,6 @@ class Indexer:
         import os
         files = []
         for root, dirs, filenames in os.walk(self.root):
-            # Prune skip_dirs in-place
             dirs[:] = [d for d in dirs if d not in self.skip_dirs]
             for f in filenames:
                 file_path = Path(root) / f

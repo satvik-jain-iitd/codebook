@@ -56,6 +56,87 @@ def test_resolve_relative_imports(tmp_path):
     resolved = resolve_relative_imports(inner_file, rels)
     assert resolved[0]["target"] == "pkg.mod.func"
 
+def test_extract_ts_relations():
+    source = """
+import { X } from './module';
+import Y from '../parent';
+// import { Z } from './comment';
+/*
+import { A } from './block';
+*/
+const s = "import { B } from './string'";
+import './side-effect';
+export { C } from './export';
+import('./dynamic');
+"""
+    from codebookx.engine.parser import extract_ts_relations
+    rels = extract_ts_relations(source)
+    targets = [r["target"] for r in rels]
+    
+    assert "./module" in targets
+    assert "../parent" in targets
+    assert "./side-effect" in targets
+    assert "./export" in targets
+    assert "./dynamic" in targets
+    
+    # Should ignore comments and strings
+    assert "./comment" not in targets
+    assert "./block" not in targets
+    assert "./string" not in targets
+
+    # Level checks
+    levels = {r["target"]: r["level"] for r in rels}
+    assert levels["./module"] == 1
+    assert levels["../parent"] == 2
+
+def test_resolve_ts_relative_imports(tmp_path):
+    # Setup TS project structure
+    # src/
+    #   app.ts
+    #   utils/
+    #     helper.ts
+    #     index.ts
+    #   ui/
+    #     button.tsx
+    
+    src = tmp_path / "src"
+    src.mkdir()
+    (src / "app.ts").touch()
+    
+    utils = src / "utils"
+    utils.mkdir()
+    (utils / "helper.ts").touch()
+    (utils / "index.ts").touch()
+    
+    ui = src / "ui"
+    ui.mkdir()
+    (ui / "button.tsx").touch()
+    
+    from codebookx.engine.parser import resolve_ts_relative_imports
+    
+    app_file = src / "app.ts"
+    
+    # 1. Sibling probing .ts
+    rels = [{"type": "IMPORTS", "target": "./utils/helper", "level": 1}]
+    resolved = resolve_ts_relative_imports(app_file, rels)
+    assert resolved[0]["target"] == "src.utils.helper"
+    
+    # 2. Directory index probing
+    rels = [{"type": "IMPORTS", "target": "./utils", "level": 1}]
+    resolved = resolve_ts_relative_imports(app_file, rels)
+    assert resolved[0]["target"] == "src.utils"
+    
+    # 3. .tsx probing
+    rels = [{"type": "IMPORTS", "target": "./ui/button", "level": 1}]
+    resolved = resolve_ts_relative_imports(app_file, rels)
+    assert resolved[0]["target"] == "src.ui.button"
+    
+    # 4. Parent probing
+    helper_file = utils / "helper.ts"
+    rels = [{"type": "IMPORTS", "target": "../app", "level": 2}]
+    resolved = resolve_ts_relative_imports(helper_file, rels)
+    assert resolved[0]["target"] == "src.app"
+
 def test_extract_python_relations_with_level():
     source = """
 import os
